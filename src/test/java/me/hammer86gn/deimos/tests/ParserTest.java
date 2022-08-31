@@ -1,0 +1,59 @@
+package me.hammer86gn.deimos.tests;
+
+import me.hammer86gn.deimos.lexer.Lexer;
+import me.hammer86gn.deimos.parser.Parser;
+import org.junit.jupiter.api.Test;
+
+public class ParserTest {
+
+    @Test
+    public void basicParserVariableTest() {
+        Lexer lexer = Lexer.getInstance();
+        Parser parser = Parser.getInstance();
+
+        lexer.init("Test", "local a = 'How are you'");
+        lexer.lex();
+
+        parser.init(lexer);
+        parser.parse();
+    }
+
+    @Test
+    public void basicParserVariableTest2() {
+        Lexer lexer = Lexer.getInstance();
+        Parser parser = Parser.getInstance();
+
+        lexer.init("Test", "local a = 1 + 101");
+        lexer.lex();
+
+        parser.init(lexer);
+        parser.parse();
+    }
+
+
+    @Test
+    public void lessBasicParserVariableTest() {
+        Lexer lexer = Lexer.getInstance();
+        Parser parser = Parser.getInstance();
+
+        lexer.init("Test", "local a = 2 + 3 * 4");
+        lexer.lex();
+
+        parser.init(lexer);
+        parser.parse();
+    }
+
+    @Test
+    public void lesslessBasicParserVariableTest() {
+        Lexer lexer = Lexer.getInstance();
+        Parser parser = Parser.getInstance();
+
+        lexer.init("Test", "local a = 2 + 3 * 4 - 2");
+        lexer.lex();
+
+        parser.init(lexer);
+        parser.parse();
+    }
+
+
+}
