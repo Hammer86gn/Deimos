@@ -10,8 +10,9 @@ public class FunctionCallSupplier implements ValueSupplier {
         this.node = node;
     }
 
+    @SuppressWarnings("unchecked")
     @Override
     public <U> U getValue() {
-        return null;
+        return (U) this.node;
     }
 }

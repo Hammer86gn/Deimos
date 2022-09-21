@@ -55,6 +55,7 @@ public class OperationNode extends AbstractNode {
     }
 
     public enum OperationType {
+        EQUAL,
 
         ADD,
         ADD_EQUAL,

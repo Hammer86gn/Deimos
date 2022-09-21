@@ -3,6 +3,7 @@ package me.hammer86gn.deimos.parser.node;
 import me.hammer86gn.deimos.parser.node.util.ValueSupplier;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 public class FunctionCallNode extends AbstractNode {
@@ -39,7 +40,14 @@ public class FunctionCallNode extends AbstractNode {
     @Override
     public String stringify() {
         StringBuilder sb = new StringBuilder();
+
+        System.out.println(Arrays.toString(this.valueSuppliers.toArray()));
+
+
         for (ValueSupplier valueSupplier : this.valueSuppliers) {
+            if (valueSupplier == null)
+                continue;
+
             sb.append(valueSupplier.getValue().toString());
         }
 
