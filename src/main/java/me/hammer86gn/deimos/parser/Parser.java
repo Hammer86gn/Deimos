@@ -30,6 +30,7 @@ import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
 
+@SuppressWarnings("DuplicatedCode")
 public class Parser {
     private static Parser instance;
 
@@ -79,7 +80,7 @@ public class Parser {
             this.current = this.lexerTokens.get(this.index);
 
             if (this.findingNode) {
-                if (this.findNode() == true) {
+                if (this.findNode()) {
                     return;
                 }
             } else {
@@ -90,6 +91,7 @@ public class Parser {
         }
     }
 
+    @SuppressWarnings("ConstantConditions")
     private boolean findNode() {
         LexerTokenType type = this.current.type();
         switch (type) {
@@ -232,7 +234,7 @@ public class Parser {
             }
         }
 
-
+        node.addValue(supplier);
     }
 
     private FunctionCallSupplier createFunctionCallSupplier(FunctionCallNode node) {
@@ -270,6 +272,8 @@ public class Parser {
                     }
                 }
             }
+
+            node.addValue(supplier);
         }
 
         return new FunctionCallSupplier(node);
