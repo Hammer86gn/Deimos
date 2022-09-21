@@ -12,10 +12,12 @@ import me.hammer86gn.deimos.lexer.LexerTokenType;
 import me.hammer86gn.deimos.parser.node.AbstractNode;
 import me.hammer86gn.deimos.parser.node.AssignVarNode;
 import me.hammer86gn.deimos.parser.node.ClosureNode;
+import me.hammer86gn.deimos.parser.node.FunctionCallNode;
 import me.hammer86gn.deimos.parser.node.FunctionDeclareNode;
 import me.hammer86gn.deimos.parser.node.OperationNode;
 import me.hammer86gn.deimos.parser.node.util.BoolValueSupplier;
 import me.hammer86gn.deimos.parser.node.util.FloatValueSupplier;
+import me.hammer86gn.deimos.parser.node.util.FunctionCallSupplier;
 import me.hammer86gn.deimos.parser.node.util.IntegerValueSupplier;
 import me.hammer86gn.deimos.parser.node.util.NilValueSupplier;
 import me.hammer86gn.deimos.parser.node.util.OperationValueSupplier;
@@ -106,6 +108,11 @@ public class Parser {
                     this.currentWorking = node;
                     this.findingNode = false;
                 }
+                if (this.peek().type() == LexerTokenType.OPEN_PARENTH) {
+                    FunctionCallNode node = new FunctionCallNode(this.currentClosure);
+                    node.setFunctionName(this.current.context());
+                    this.findingNode = false;
+                }
             }
             case FUNCTION -> {
                 FunctionDeclareNode node = new FunctionDeclareNode(this.currentClosure);
@@ -189,6 +196,85 @@ public class Parser {
        this.finish();
     }
 
+    public void createFunctionCallNode() {
+        FunctionCallNode node = (FunctionCallNode) this.currentWorking;
+
+        if(this.current.type() == LexerTokenType.COMMA) {
+            if (this.peek().type() == LexerTokenType.CLSE_PARENTH) {
+                this.parserErrors.add(new ParserError(this.peek(), "Unexpected comma"));
+            }
+        }
+        if (this.current.type() == LexerTokenType.CLSE_PARENTH) {
+            this.finish();
+        }
+
+        ValueSupplier supplier = null;
+
+        switch (this.current.type()) {
+            case INT -> supplier = new IntegerValueSupplier(Integer.parseInt(this.current.context()));
+            case FLOAT -> supplier = new FloatValueSupplier(Integer.parseInt(this.current.context()));
+            case STRING -> {
+                String content = this.current.context();
+                content = content.substring(1, content.length() - 1);
+                supplier = new StringValueSupplier(content);
+            }
+            case TRUE, FALSE -> supplier = new BoolValueSupplier(this.current.type().name().toLowerCase());
+            case NIL -> supplier = new NilValueSupplier();
+            case IDENTIFIER -> {
+                if (this.peek().type() == LexerTokenType.OPEN_PARENTH) {
+                    FunctionCallNode node1 = new FunctionCallNode(this.currentWorking);
+                    node1.setFunctionName(this.current.context().substring(1, this.current.context().length() - 1));
+
+                    supplier = this.createFunctionCallSupplier(node);
+                } else {
+                    supplier = new VariableValueSupplier(this.current.context());
+                }
+            }
+        }
+
+
+    }
+
+    private FunctionCallSupplier createFunctionCallSupplier(FunctionCallNode node) {
+
+        while(this.current.type() != LexerTokenType.CLSE_BRACE) {
+            this.index += 1;
+            this.current = this.lexerTokens.get(this.index);
+
+            if (this.current.type() == LexerTokenType.COMMA) {
+                if (this.peek().type() == LexerTokenType.CLSE_PARENTH) {
+                    this.parserErrors.add(new ParserError(this.peek(), "Unexpected comma"));
+                }
+            }
+
+            ValueSupplier supplier = null;
+
+            switch (this.current.type()) {
+                case INT -> supplier = new IntegerValueSupplier(Integer.parseInt(this.current.context()));
+                case FLOAT -> supplier = new FloatValueSupplier(Integer.parseInt(this.current.context()));
+                case STRING -> {
+                    String content = this.current.context();
+                    content = content.substring(1, content.length() - 1);
+                    supplier = new StringValueSupplier(content);
+                }
+                case TRUE, FALSE -> supplier = new BoolValueSupplier(this.current.type().name().toLowerCase());
+                case NIL -> supplier = new NilValueSupplier();
+                case IDENTIFIER -> {
+                    if (this.peek().type() == LexerTokenType.OPEN_PARENTH) {
+                        FunctionCallNode node1 = new FunctionCallNode(this.currentWorking);
+                        node1.setFunctionName(this.current.context().substring(1, this.current.context().length() - 1));
+
+                        supplier = this.createFunctionCallSupplier(node);
+                    } else {
+                        supplier = new VariableValueSupplier(this.current.context());
+                    }
+                }
+            }
+        }
+
+        return new FunctionCallSupplier(node);
+    }
+
     private void createOperationNode(OperationNode operation) {
         int braceIndex = -1;
         boolean finish = false;
@@ -251,8 +337,10 @@ public class Parser {
                         case NIL -> supplier = new NilValueSupplier();
                         case IDENTIFIER -> {
                             if (this.peek().type() == LexerTokenType.OPEN_PARENTH) {
-                                // TODO(Chloe):
-                                //  function call will be here once function calls get implemented into the lexer
+                                FunctionCallNode node1 = new FunctionCallNode(this.currentWorking);
+                                node1.setFunctionName(this.current.context().substring(1, this.current.context().length() - 1));
+
+                                supplier = this.createFunctionCallSupplier(node1);
                             } else {
                                 supplier = new VariableValueSupplier(braceToken.context());
                             }
