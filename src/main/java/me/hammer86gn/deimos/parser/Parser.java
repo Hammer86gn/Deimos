@@ -192,9 +192,14 @@ public class Parser {
         this.finish();
     }
 
+    // NOTE(Chloe): Variable assign nodes mean there is already and equal sign
     private void continueAssignVarNode() {
         AssignVarNode node = (AssignVarNode) this.currentWorking;
         OperationNode operation = node.getNode();
+
+        if (operation == null) {
+            operation = new OperationNode();
+        }
 
         this.createOperationNode(operation);
 
@@ -203,6 +208,75 @@ public class Parser {
 
        this.finish();
     }
+
+    private void createOperationNode(OperationNode operationNode) {
+        boolean finishedNode = false;
+        int increase = 0;
+
+        while(!finishedNode) {
+
+            LexerToken token = this.peek(this.index + increase);
+            if (token.type() == LexerTokenType.END_OF_LINE) {
+                finishedNode = true;
+            }
+
+            if (token.type().isSymbol()) {
+
+                if (operationNode.getValue1() != null) {
+                    OperationNode depth = new OperationNode();
+                    depth.setType(OperationNode.OperationType.getTypeFromTokenType(token.type()));
+                    depth.setValue(operationNode.getValue1());
+                    operationNode.setValue1(new OperationValueSupplier(depth));
+
+                    finishedNode = true;
+                } else {
+                    operationNode.setType(OperationNode.OperationType.getTypeFromTokenType(token.type()));
+                }
+
+            } else {
+                if (token.type() != LexerTokenType.END_OF_LINE) {
+                    if (operationNode.getValue() == null) {
+                        operationNode.setValue(this.createValueSupplierFromToken(token));
+                    } else {
+                        ValueSupplier supplier = this.createValueSupplierFromToken(token);
+                        operationNode.setValue1(supplier);
+                    }
+                }
+            }
+            increase += 1;
+        }
+
+        System.out.println("Finishing operation node: " + operationNode.stringify());
+
+        this.index += increase;
+    }
+
+    private ValueSupplier createValueSupplierFromToken(LexerToken token) {
+        ValueSupplier supplier = null;
+
+        switch (token.type()) {
+            case INT -> {
+                supplier = new IntegerValueSupplier(Integer.parseInt(token.context()));
+            }
+            case FLOAT -> supplier = new FloatValueSupplier(Integer.parseInt(token.context()));
+            case STRING -> {
+                String content = token.context();
+                content = content.substring(1, content.length() - 1);
+                supplier = new StringValueSupplier(content);
+            }
+            case TRUE, FALSE -> supplier = new BoolValueSupplier(token.type().name().toLowerCase());
+            case NIL -> supplier = new NilValueSupplier();
+            case IDENTIFIER -> {
+                if (this.peek().type() == LexerTokenType.OPEN_PARENTH) {
+                    // TODO(Chloe)
+                } else {
+                    supplier = new VariableValueSupplier(token.context());
+                }
+            }
+        }
+        return supplier;
+    }
+
 
     public void createFunctionCallNode() {
         FunctionCallNode node = (FunctionCallNode) this.currentWorking;
@@ -283,132 +357,6 @@ public class Parser {
         }
 
         return new FunctionCallSupplier(node);
-    }
-
-    private void createOperationNode(OperationNode operation) {
-        int braceIndex = -1;
-        boolean finish = false;
-
-        while (!finish) {
-            ValueSupplier supplier = null;
-            LexerToken braceToken = this.peek(this.index + braceIndex);
-
-            System.out.println("Not finished");
-
-            // FIXME(Chloe)
-            if (operation.getType() != null) {
-                if (this.peek(this.index + braceIndex + 1).type().isSymbol()) {
-                    this.index += braceIndex;
-                    OperationNode node = new OperationNode();
-                    this.createOperationNode(node);
-                    supplier = new OperationValueSupplier(node);
-
-                    if (operation.getValue() == null) {
-                        operation.setValue(supplier);
-
-                        int increase = 1;
-                        if (node.getValue() != null) {
-                            increase += 1;
-                        }
-                        if (node.getValue1() != null) {
-                            increase += 1;
-                        }
-
-                        if (this.peek(this.index + braceIndex + 1).type() == LexerTokenType.END_OF_LINE) {
-
-
-                            finish = true;
-                        }
-
-                        braceIndex += increase;
-                    } else {
-                        operation.setValue1(supplier);
-                        finish = true;
-                    }
-                }
-            }
-
-            if (!finish) {
-                if (braceToken.type().isSymbol()) {
-                    if (operation.getType() == null) {
-                        operation.setType(OperationNode.OperationType.getTypeFromTokenType(braceToken.type()));
-                    } else {
-                        OperationNode node = new OperationNode();
-                        this.createOperationNode(node);
-                        supplier = new OperationValueSupplier(node);
-                    }
-                } else {
-                    switch (braceToken.type()) {
-                        case END_OF_LINE -> finish = true;
-
-                        case INT -> supplier = new IntegerValueSupplier(Integer.parseInt(braceToken.context()));
-                        case FLOAT -> supplier = new FloatValueSupplier(Integer.parseInt(braceToken.context()));
-                        case STRING -> {
-                            String content = braceToken.context();
-                            content = content.substring(1, content.length() - 1);
-                            supplier = new StringValueSupplier(content);
-                        }
-                        case TRUE, FALSE -> supplier = new BoolValueSupplier(braceToken.type().name().toLowerCase());
-                        case NIL -> supplier = new NilValueSupplier();
-                        case IDENTIFIER -> {
-                            if (this.peek().type() == LexerTokenType.OPEN_PARENTH) {
-                                FunctionCallNode node1 = new FunctionCallNode(this.currentWorking);
-                                node1.setFunctionName(this.current.context().substring(1, this.current.context().length() - 1));
-
-                                supplier = this.createFunctionCallSupplier(node1);
-                            } else {
-                                supplier = new VariableValueSupplier(braceToken.context());
-                            }
-                        }
-                    }
-                }
-            }
-
-            if (operation.getValue() == null) {
-                operation.setValue(supplier);
-            } else {
-                operation.setValue1(supplier);
-
-                if (supplier != null) {
-                    finish = true;
-                }
-            }
-
-            if (this.peek(this.index + braceIndex + 1).type() == LexerTokenType.END_OF_LINE) {
-                if (operation.getType() == null) {
-                    // TODO(Chloe): Clean this up ASAP
-                    operation.setType(OperationNode.OperationType.getTypeFromTokenType(this.peek(this.index + braceIndex - 1).type()));
-
-                    switch (this.peek(this.index + braceIndex).type()) {
-
-                        case INT -> supplier = new IntegerValueSupplier(Integer.parseInt(braceToken.context()));
-                        case FLOAT -> supplier = new FloatValueSupplier(Integer.parseInt(braceToken.context()));
-                        case STRING -> {
-                            String content = braceToken.context();
-                            content = content.substring(1, content.length() - 1);
-                            supplier = new StringValueSupplier(content);
-                        }
-                        case TRUE, FALSE -> supplier = new BoolValueSupplier(braceToken.type().name().toLowerCase());
-                        case NIL -> supplier = new NilValueSupplier();
-                        case IDENTIFIER -> {
-                            if (this.peek().type() == LexerTokenType.OPEN_PARENTH) {
-                                FunctionCallNode node1 = new FunctionCallNode(this.currentWorking);
-                                node1.setFunctionName(this.current.context().substring(1, this.current.context().length() - 1));
-
-                                supplier = this.createFunctionCallSupplier(node1);
-                            } else {
-                                supplier = new VariableValueSupplier(braceToken.context());
-                            }
-                        }
-                    }
-                    operation.setValue(supplier);
-                }
-                finish = true;
-            }
-
-            braceIndex += 1;
-        }
-        this.index += braceIndex;
     }
 
     private void finish() {

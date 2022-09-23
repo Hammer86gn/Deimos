@@ -20,6 +20,18 @@ public class ParserTest {
     }
 
     @Test
+    public void basicParserNonLocalVariableTest() {
+        Lexer lexer = Lexer.getInstance();
+        Parser parser = Parser.getInstance();
+
+        lexer.init("Test", "a = 1 + 101 + 11");
+        lexer.lex();
+
+        parser.init(lexer);
+        parser.parse();
+    }
+
+    @Test
     public void basicParserVariableTest2() {
         Lexer lexer = Lexer.getInstance();
         Parser parser = Parser.getInstance();
