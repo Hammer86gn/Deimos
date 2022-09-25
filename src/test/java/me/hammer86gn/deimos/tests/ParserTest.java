@@ -49,7 +49,7 @@ public class ParserTest {
         Lexer lexer = Lexer.getInstance();
         Parser parser = Parser.getInstance();
 
-        lexer.init("Test", "local a = 2 + 3 * 4");
+        lexer.init("Test", "a = 2 + 3 * 4");
         lexer.lex();
 
         parser.init(lexer);
@@ -61,7 +61,7 @@ public class ParserTest {
         Lexer lexer = Lexer.getInstance();
         Parser parser = Parser.getInstance();
 
-        lexer.init("Test", "local a = 2 + 3 * 4 - 2");
+        lexer.init("Test", "a = 2 + 3 * 4 - 2");
         lexer.lex();
 
         parser.init(lexer);

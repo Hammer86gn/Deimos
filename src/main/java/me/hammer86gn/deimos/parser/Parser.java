@@ -221,8 +221,6 @@ public class Parser {
 
             LexerToken token = this.peek(this.index + increase);
 
-            System.out.println("Token: " + token.type() + ", " + token.context());
-
             if (token.type() == LexerTokenType.END_OF_LINE) {
                 finishedNode = true;
             }
@@ -233,6 +231,15 @@ public class Parser {
                     OperationNode depth = new OperationNode();
                     depth.setType(OperationNode.OperationType.getTypeFromTokenType(token.type()));
                     depth.setValue(operationNode.getValue1());
+
+                    if (this.local) {
+                        increase -= 1;
+                    }
+
+                    this.index += increase;
+                    increase = 0;
+                    this.createOperationNode(depth);
+
                     operationNode.setValue1(new OperationValueSupplier(depth));
 
                     finishedNode = true;
