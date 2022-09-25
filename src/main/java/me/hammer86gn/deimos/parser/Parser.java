@@ -213,15 +213,22 @@ public class Parser {
         boolean finishedNode = false;
         int increase = 0;
 
+        if (this.local) {
+            increase = -1;
+        }
+
         while(!finishedNode) {
 
             LexerToken token = this.peek(this.index + increase);
+
+            System.out.println("Token: " + token.type() + ", " + token.context());
+
             if (token.type() == LexerTokenType.END_OF_LINE) {
                 finishedNode = true;
             }
 
             if (token.type().isSymbol()) {
-
+                System.out.println("This token is a symbol");
                 if (operationNode.getValue1() != null) {
                     OperationNode depth = new OperationNode();
                     depth.setType(OperationNode.OperationType.getTypeFromTokenType(token.type()));
@@ -235,10 +242,11 @@ public class Parser {
 
             } else {
                 if (token.type() != LexerTokenType.END_OF_LINE) {
+                    ValueSupplier supplier = this.createValueSupplierFromToken(token);
                     if (operationNode.getValue() == null) {
-                        operationNode.setValue(this.createValueSupplierFromToken(token));
+                        operationNode.setValue(supplier);
+                        System.out.println("Setting value");
                     } else {
-                        ValueSupplier supplier = this.createValueSupplierFromToken(token);
                         operationNode.setValue1(supplier);
                     }
                 }
