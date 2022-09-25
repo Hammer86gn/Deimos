@@ -246,6 +246,10 @@ public class Parser {
             increase += 1;
         }
 
+        if (operationNode.getType() == null) {
+            operationNode.setType(OperationNode.OperationType.getTypeFromTokenType(this.peek(this.index + increase - 3).type()));
+        }
+
         System.out.println("Finishing operation node: " + operationNode.stringify());
 
         this.index += increase;
