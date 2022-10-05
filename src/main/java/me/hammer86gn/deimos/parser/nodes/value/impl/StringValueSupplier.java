@@ -1,4 +1,6 @@
-package me.hammer86gn.deimos.parser.node.util;
+package me.hammer86gn.deimos.parser.nodes.value.impl;
+
+import me.hammer86gn.deimos.parser.nodes.value.ValueSupplier;
 
 public class StringValueSupplier implements ValueSupplier {
 
@@ -8,7 +10,6 @@ public class StringValueSupplier implements ValueSupplier {
         this.value = value;
     }
 
-    @SuppressWarnings("unchecked")
     @Override
     public <U> U getValue() {
         return (U) this.value;

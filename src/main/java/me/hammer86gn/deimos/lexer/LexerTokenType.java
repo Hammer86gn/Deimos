@@ -144,15 +144,38 @@ public enum LexerTokenType {
     }
 
     @SuppressWarnings("EnhancedSwitchMigration")
+    public boolean isOperation() {
+        switch (this) {
+            case ADD:
+            case SUBTRACT:
+            case MULTIPLY:
+            case DIVIDE:
+            case MODULO:
+            case POWER:
+            case LENGTH:
+            case LOGICAL_AND:
+            case LOGICAL_NOT:
+            case LOGICAL_OR:
+            case SHIFT_LEFT:
+            case SHIFT_RIGHT:
+            case FLOOR:
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    @SuppressWarnings("EnhancedSwitchMigration")
     public boolean isConditional() {
         switch (this) {
+            case AND:
+            case OR:
             case EQUAL_TO:
             case NOT_EQUAL:
             case LESS_THAN_OR_EQUAL:
             case GREATER_THAN_OR_EQUAL:
             case LESS_THAN:
             case GREATER_THAN:
-            case EQUAL:
                 return true;
             default:
                 return false;

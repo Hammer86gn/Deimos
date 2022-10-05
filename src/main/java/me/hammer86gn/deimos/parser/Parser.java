@@ -1,411 +1,260 @@
-/*
-
- * This class is very messy, but it works for now and that's really my aim for the project at this point in time.
- *
- */
 package me.hammer86gn.deimos.parser;
 
-import me.hammer86gn.deimos.Deimos;
-import me.hammer86gn.deimos.lexer.Lexer;
 import me.hammer86gn.deimos.lexer.LexerToken;
 import me.hammer86gn.deimos.lexer.LexerTokenType;
-import me.hammer86gn.deimos.parser.node.AbstractNode;
-import me.hammer86gn.deimos.parser.node.AssignVarNode;
-import me.hammer86gn.deimos.parser.node.ClosureNode;
-import me.hammer86gn.deimos.parser.node.FunctionCallNode;
-import me.hammer86gn.deimos.parser.node.FunctionDeclareNode;
-import me.hammer86gn.deimos.parser.node.OperationNode;
-import me.hammer86gn.deimos.parser.node.util.BoolValueSupplier;
-import me.hammer86gn.deimos.parser.node.util.FloatValueSupplier;
-import me.hammer86gn.deimos.parser.node.util.FunctionCallSupplier;
-import me.hammer86gn.deimos.parser.node.util.IntegerValueSupplier;
-import me.hammer86gn.deimos.parser.node.util.NilValueSupplier;
-import me.hammer86gn.deimos.parser.node.util.OperationValueSupplier;
-import me.hammer86gn.deimos.parser.node.util.StringValueSupplier;
-import me.hammer86gn.deimos.parser.node.util.ValueSupplier;
-import me.hammer86gn.deimos.parser.node.util.VariableValueSupplier;
-import me.hammer86gn.deimos.util.Pair;
+import me.hammer86gn.deimos.parser.nodes.AbstractParserNode;
+import me.hammer86gn.deimos.parser.nodes.AssignVariableNode;
+import me.hammer86gn.deimos.parser.nodes.ClosureNode;
+import me.hammer86gn.deimos.parser.nodes.value.ValueSupplier;
+import me.hammer86gn.deimos.parser.nodes.value.impl.BooleanValueSupplier;
+import me.hammer86gn.deimos.parser.nodes.value.impl.ConditionalValueSupplier;
+import me.hammer86gn.deimos.parser.nodes.value.impl.FloatValueSupplier;
+import me.hammer86gn.deimos.parser.nodes.value.impl.IntegerValueSupplier;
+import me.hammer86gn.deimos.parser.nodes.value.impl.OperationValueSupplier;
+import me.hammer86gn.deimos.parser.nodes.value.impl.StringValueSupplier;
+import org.jetbrains.annotations.Nullable;
 
-import java.util.ArrayList;
 import java.util.LinkedList;
-import java.util.List;
 
-@SuppressWarnings("DuplicatedCode")
 public class Parser {
+
     private static Parser instance;
 
-    private int index = 0;
-    private boolean initialized = false;
+    private int index;
+    private boolean finding;
 
-    private int anonymized = 0;
+    private LexerToken current;
+    private LinkedList<LexerToken> lexerTokens;
 
-    private LexerToken current = null;
-    private ClosureNode root = null;
-    private ClosureNode currentClosure = null;
-    private boolean findingNode = false;
+    private boolean local;
 
-    private boolean local = false;
-    private AbstractNode currentWorking = null;
+    private ClosureNode rootClosure;
+    private ClosureNode currentClosure;
 
-    private String sourceName = "";
-    private LinkedList<LexerToken> lexerTokens = null;
-
-    private LinkedList<ParserError> parserErrors = null;
+    private AbstractParserNode currentNode;
 
     private Parser() {
         Parser.instance = this;
     }
 
-    public void init(Lexer lexer) {
-        this.index = 0;
-        this.initialized = true;
-
-        this.current = null;
-        this.root = new ClosureNode();
-        this.currentClosure = this.root;
-        this.findingNode = true;
-
-        this.local = false;
-        this.currentWorking = null;
-
-        this.sourceName = lexer.getSourceName();
-        this.lexerTokens = lexer.getTokens();
-
-        this.parserErrors = new LinkedList<>();
-    }
-
     public void parse() {
-        int length = this.lexerTokens.size();
-        while (this.index < length) {
-            this.current = this.lexerTokens.get(this.index);
-
-            if (this.findingNode) {
-                if (this.findNode()) {
-                    return;
-                }
+        int tokenLen = this.lexerTokens.size();
+        while (tokenLen < this.index) {
+            if (this.finding) {
+                this.findNode();
             } else {
-               this.continueBridge();
+                this.continueNode();
             }
 
             this.index += 1;
+            this.current = this.lexerTokens.get(this.index);
         }
     }
 
-    @SuppressWarnings("ConstantConditions")
-    private boolean findNode() {
+    private void findNode() {
         LexerTokenType type = this.current.type();
         switch (type) {
-            case LOCAL -> {
-                this.local = true;
-                if (this.peek().type() != LexerTokenType.IDENTIFIER && this.peek().type() != LexerTokenType.FUNCTION) {
-                    this.parserErrors.add(new ParserError(this.current, "Undefined use of Local"));
-                }
-            }
             case IDENTIFIER -> {
                 if (this.peek().type() == LexerTokenType.EQUAL) {
-                    AssignVarNode node = new AssignVarNode(this.currentClosure);
-                    node.setLocal(this.local);
-                    node.setName(this.current.context());
-                    node.setNode(new OperationNode());
-                    this.currentWorking = node;
-                    this.findingNode = false;
+                    /* AssignVariable */
+                    this.currentNode = new AssignVariableNode(this.currentClosure, this.local, this.current.context(), null);
+                    this.index += 1;
                 }
-                if (this.peek().type() == LexerTokenType.OPEN_PARENTH) {
-                    FunctionCallNode node = new FunctionCallNode(this.currentClosure);
-                    node.setFunctionName(this.current.context());
-
-                    this.currentWorking = node;
-                    this.findingNode = false;
-                }
-            }
-            case FUNCTION -> {
-                FunctionDeclareNode node = new FunctionDeclareNode(this.currentClosure);
-                node.setLocal(this.local);
-
-                LexerToken peeked = this.peek();
-                if (peeked.type() != LexerTokenType.IDENTIFIER || peeked.type() != LexerTokenType.OPEN_PARENTH) {
-                    this.parserErrors.add(new ParserError(peeked, "Unexpected token following function declaration"));
-                }
-
-                node.setFunctionLabel(peeked.type() == LexerTokenType.IDENTIFIER ? peeked.context() : "anonymous$" + ++this.anonymized);
-                this.index++;
-
-                this.currentWorking = node;
-                this.findingNode = false;
-            }
-            case END -> {
-                return true;
             }
         }
-        return false;
     }
 
-    private void continueBridge() {
-        if (this.currentWorking instanceof AssignVarNode) {
-            this.continueAssignVarNode();
-        }
+    private void continueNode() {
+        if (this.currentNode == null)
+            return;
 
-        if (this.currentWorking instanceof FunctionDeclareNode) {
-            this.continueFunctionDeclNode();
+        if (this.currentNode instanceof AssignVariableNode) {
+            this.continueAssignVariableNode();
         }
-
-        if (this.currentWorking instanceof FunctionCallNode) {
-            this.createFunctionCallNode();
-        }
-
     }
 
-    private void continueFunctionDeclNode() {
-        FunctionDeclareNode node = (FunctionDeclareNode) this.currentWorking;
-        List<String> argNames = new ArrayList<>();
-        ClosureNode funcClosure = new ClosureNode();
-
-        if (this.current.type() == LexerTokenType.OPEN_PARENTH) {
-            this.index++;
-
-            while (this.peek(0).type() != LexerTokenType.CLSE_PARENTH) {
-                if (this.current.type() == LexerTokenType.IDENTIFIER) {
-                    argNames.add(this.peek(0).context());
-                }
-                this.index++;
-            }
-
-        }
-        this.index++;
-        node.setArgs(argNames.toArray(argNames.toArray(new String[0])));
-
-        ClosureNode previousClosure = this.currentClosure;
-
-        // new closure
-        this.findingNode = true;
-        this.currentClosure = funcClosure;
-
-        this.parse();
-
-        // fixing
-        this.findingNode = false;
-        this.currentClosure = previousClosure;
-        this.currentWorking = node;
-
-        node.setClosure(funcClosure);
+    private void continueAssignVariableNode() {
+        ValueSupplier supplier = this.createValueSupplier();
+        ((AssignVariableNode) this.currentNode).setValue(supplier);
 
         this.finish();
     }
 
-    // NOTE(Chloe): Variable assign nodes mean there is already and equal sign
-    private void continueAssignVarNode() {
-        AssignVarNode node = (AssignVarNode) this.currentWorking;
-        OperationNode operation = node.getNode();
 
-        if (operation == null) {
-            operation = new OperationNode();
+    private ValueSupplier createValueSupplier() {
+        // TODO(Chloe): Conditional Value Suppliers e.g. a == 1; 2 <= 1.
+
+        switch (this.current.type()) {
+            case FLOAT, INT -> {
+                LexerToken peekToken = this.peek();
+                if (peekToken != null && peekToken.type().isOperation()) {
+                    // OperationValue
+                    return this.createOperationValueSupplier(0);
+                } else if (peekToken != null && peekToken.type().isConditional()) {
+                    // ConditionalValue
+                    return this.createConditionalValueSupplier(0);
+                } else  {
+                    // NumberValue either float or int
+                    if (this.current.type() == LexerTokenType.INT) {
+                        return new IntegerValueSupplier(Long.parseLong(this.current.context()));
+                    } else {
+                        return new FloatValueSupplier(Double.parseDouble(this.current.context()));
+                    }
+                }
+            }
+
+            case STRING -> {
+                String value = this.current.context().substring(1, this.current.context().length() - 1);
+
+                LexerToken peekToken = this.peek();
+                if (peekToken != null && peekToken.type() == LexerTokenType.CONCATENATE) {
+                    value = this.concatString(value);
+                } else if (peekToken != null && peekToken.type().isConditional()) {
+                    // ConditionalValue
+                    return this.createConditionalValueSupplier(0);
+                }
+
+                return new StringValueSupplier(value);
+            }
+
+            case TRUE, FALSE -> {
+                boolean value = this.current.type() == LexerTokenType.TRUE;
+                return new BooleanValueSupplier(value);
+            }
+
         }
 
-        this.createOperationNode(operation);
 
-        node.setNode(operation);
-        this.currentWorking = node;
-
-       this.finish();
+        return null;
     }
 
-    private void createOperationNode(OperationNode operationNode) {
-        boolean finishedNode = false;
-        int increase = 0;
+    private OperationValueSupplier createOperationValueSupplier(int a) {
+        OperationValueSupplier rootOperation = new OperationValueSupplier(null, null, null);
 
-        if (this.local) {
-            increase = -1;
-        }
+        boolean endSearch = false;
+        int increase = a;
 
-        while(!finishedNode) {
-
-            LexerToken token = this.peek(this.index + increase);
-
-            if (token.type() == LexerTokenType.END_OF_LINE) {
-                finishedNode = true;
+        while (!endSearch) {
+            LexerToken peekToken = this.lexerTokens.get(this.index + increase);
+            if (peekToken == null || peekToken.type() == LexerTokenType.END_OF_LINE) {
+                endSearch = true;
+                break;
             }
 
-            if (token.type().isSymbol()) {
-                System.out.println("This token is a symbol");
-                if (operationNode.getValue1() != null) {
-                    OperationNode depth = new OperationNode();
-                    depth.setType(OperationNode.OperationType.getTypeFromTokenType(token.type()));
-                    depth.setValue(operationNode.getValue1());
-
-                    if (this.local) {
-                        increase -= 1;
-                    }
-
-                    this.index += increase;
-                    increase = 0;
-                    this.createOperationNode(depth);
-
-                    operationNode.setValue1(new OperationValueSupplier(depth));
-
-                    finishedNode = true;
-                } else {
-                    operationNode.setType(OperationNode.OperationType.getTypeFromTokenType(token.type()));
-                }
-
-            } else {
-                if (token.type() != LexerTokenType.END_OF_LINE) {
-                    ValueSupplier supplier = this.createValueSupplierFromToken(token);
-                    if (operationNode.getValue() == null) {
-                        operationNode.setValue(supplier);
-                        System.out.println("Setting value");
+            if (peekToken.type() == LexerTokenType.INT || peekToken.type() == LexerTokenType.FLOAT) {
+                // add number
+                if (rootOperation.getOperand() == null) {
+                    if (peekToken.type() == LexerTokenType.INT) {
+                        rootOperation.setOperand(new IntegerValueSupplier(Long.parseLong(peekToken.context())));
                     } else {
-                        operationNode.setValue1(supplier);
+                        rootOperation.setOperand(new FloatValueSupplier(Double.parseDouble(peekToken.context())));
                     }
+                } else {
+                    LexerToken peekPeekToken = this.lexerTokens.get(this.index + increase + 1);
+                    if (peekPeekToken != null && peekPeekToken.type().isOperation()) {
+                        // extended operation
+                        rootOperation.setOperand1(this.createOperationValueSupplier(increase));
+                    } else {
+                        // second number
+
+                        if (peekToken.type() == LexerTokenType.INT) {
+                            rootOperation.setOperand(new IntegerValueSupplier(Long.parseLong(peekToken.context())));
+                        } else {
+                            rootOperation.setOperand(new FloatValueSupplier(Double.parseDouble(peekToken.context())));
+                        }
+                    }
+
                 }
+
             }
+
+            if (peekToken.type().isOperation()) {
+                if (rootOperation.getType() != null) {
+                    // TODO(Chloe) Error
+                }
+
+                rootOperation.setType(this.peek().type());
+            }
+
             increase += 1;
         }
 
-        if (operationNode.getType() == null) {
-            operationNode.setType(OperationNode.OperationType.getTypeFromTokenType(this.peek(this.index + increase - 3).type()));
-        }
+        this.index += increase;
+        return rootOperation;
+    }
 
-        System.out.println("Finishing operation node: " + operationNode.stringify());
+    private ConditionalValueSupplier createConditionalValueSupplier(int a) {
+        ConditionalValueSupplier rootCondition = new ConditionalValueSupplier(null, null, null);
+
+        boolean endSearch = false;
+        int increase = a;
+
+        while (!endSearch) {
+            LexerToken peekToken = this.lexerTokens.get(this.index + increase);
+            if (peekToken == null || peekToken.type() == LexerTokenType.END_OF_LINE) {
+                endSearch = true;
+                break;
+            }
+
+             //  TODO(Chloe): this
+
+        }
 
         this.index += increase;
+        return rootCondition;
     }
 
-    private ValueSupplier createValueSupplierFromToken(LexerToken token) {
-        ValueSupplier supplier = null;
+    private String concatString(String a) {
+        StringBuilder sb = new StringBuilder(a);
 
-        switch (token.type()) {
-            case INT -> {
-                supplier = new IntegerValueSupplier(Integer.parseInt(token.context()));
+        boolean endSearch = false;
+        int increase = 0;
+
+        while (!endSearch) {
+            LexerToken peekToken = this.lexerTokens.get(this.index + increase);
+            if (peekToken == null || peekToken.type() == LexerTokenType.END_OF_LINE) {
+                endSearch = true;
+                break;
             }
-            case FLOAT -> supplier = new FloatValueSupplier(Integer.parseInt(token.context()));
-            case STRING -> {
-                String content = token.context();
-                content = content.substring(1, content.length() - 1);
-                supplier = new StringValueSupplier(content);
+            if (peekToken.type() == LexerTokenType.STRING && this.lexerTokens.get(this.index + increase + 1).type() != LexerTokenType.CONCATENATE) {
+                endSearch = true;
             }
-            case TRUE, FALSE -> supplier = new BoolValueSupplier(token.type().name().toLowerCase());
-            case NIL -> supplier = new NilValueSupplier();
-            case IDENTIFIER -> {
-                if (this.peek().type() == LexerTokenType.OPEN_PARENTH) {
-                    // TODO(Chloe)
-                } else {
-                    supplier = new VariableValueSupplier(token.context());
-                }
+
+            if (peekToken.type() == LexerTokenType.CONCATENATE) {
+                // good
+            } else if (peekToken.type() == LexerTokenType.STRING) {
+                sb.append(peekToken.context().substring(1, peekToken.context().length() - 1));
+            } else {
+                // TODO(Chloe) Error
             }
+
+            increase += 1;
         }
-        return supplier;
+
+        this.index += increase;
+        return sb.toString();
     }
 
 
-    public void createFunctionCallNode() {
-        FunctionCallNode node = (FunctionCallNode) this.currentWorking;
-
-        if(this.current.type() == LexerTokenType.COMMA) {
-            if (this.peek().type() == LexerTokenType.CLSE_PARENTH) {
-                this.parserErrors.add(new ParserError(this.peek(), "Unexpected comma"));
-            }
-        }
-        if (this.current.type() == LexerTokenType.CLSE_PARENTH) {
-            this.finish();
-        }
-
-        ValueSupplier supplier = null;
-
-        switch (this.current.type()) {
-            case INT -> supplier = new IntegerValueSupplier(Integer.parseInt(this.current.context()));
-            case FLOAT -> supplier = new FloatValueSupplier(Integer.parseInt(this.current.context()));
-            case STRING -> {
-                String content = this.current.context();
-                content = content.substring(1, content.length() - 1);
-                supplier = new StringValueSupplier(content);
-            }
-            case TRUE, FALSE -> supplier = new BoolValueSupplier(this.current.type().name().toLowerCase());
-            case NIL -> supplier = new NilValueSupplier();
-            case IDENTIFIER -> {
-                if (this.peek().type() == LexerTokenType.OPEN_PARENTH) {
-                    FunctionCallNode node1 = new FunctionCallNode(this.currentWorking);
-                    node1.setFunctionName(this.current.context().substring(1, this.current.context().length() - 1));
-
-                    supplier = this.createFunctionCallSupplier(node);
-                } else {
-                    supplier = new VariableValueSupplier(this.current.context());
-                }
-            }
-        }
-
-        node.addValue(supplier);
+    private @Nullable LexerToken checkout(int index) {
+        if (this.lexerTokens.size() < index)
+            return null;
+        return this.lexerTokens.get(index);
     }
 
-    private FunctionCallSupplier createFunctionCallSupplier(FunctionCallNode node) {
+    private @Nullable LexerToken peek() {
+        if (this.lexerTokens.size() < this.index + 1)
+            return null;
 
-        while(this.current.type() != LexerTokenType.CLSE_BRACE) {
-            this.index += 1;
-            this.current = this.lexerTokens.get(this.index);
-
-            if (this.current.type() == LexerTokenType.COMMA) {
-                if (this.peek().type() == LexerTokenType.CLSE_PARENTH) {
-                    this.parserErrors.add(new ParserError(this.peek(), "Unexpected comma"));
-                }
-            }
-
-            ValueSupplier supplier = null;
-
-            switch (this.current.type()) {
-                case INT -> supplier = new IntegerValueSupplier(Integer.parseInt(this.current.context()));
-                case FLOAT -> supplier = new FloatValueSupplier(Integer.parseInt(this.current.context()));
-                case STRING -> {
-                    String content = this.current.context();
-                    content = content.substring(1, content.length() - 1);
-                    supplier = new StringValueSupplier(content);
-                }
-                case TRUE, FALSE -> supplier = new BoolValueSupplier(this.current.type().name().toLowerCase());
-                case NIL -> supplier = new NilValueSupplier();
-                case IDENTIFIER -> {
-                    if (this.peek().type() == LexerTokenType.OPEN_PARENTH) {
-                        FunctionCallNode node1 = new FunctionCallNode(this.currentWorking);
-                        node1.setFunctionName(this.current.context().substring(1, this.current.context().length() - 1));
-
-                        supplier = this.createFunctionCallSupplier(node);
-                    } else {
-                        supplier = new VariableValueSupplier(this.current.context());
-                    }
-                }
-            }
-
-            node.addValue(supplier);
-        }
-
-        return new FunctionCallSupplier(node);
-    }
-
-    private void finish() {
-        if (Deimos.DEIMOS_ENABLE_DEBUG) {
-            Deimos.getLogger().info("[PARSER] Finished Node: " + this.currentWorking.stringify());
-        }
-
-        this.currentClosure.appendChild(this.currentWorking);
-        this.currentWorking = null;
-
-        this.local = false;
-        this.findingNode = true;
-    }
-
-    private LexerToken peek() {
-        if (this.index + 1 >= this.lexerTokens.size()) {
-            return new LexerToken(LexerTokenType.END_OF_LINE, new Pair<>(Long.MAX_VALUE - 1, Long.MAX_VALUE - 1), "");
-        }
         return this.lexerTokens.get(this.index + 1);
     }
 
-    private LexerToken peek(int a) {
-        if (this.index + a >= this.lexerTokens.size()) {
-            return new LexerToken(LexerTokenType.END_OF_LINE, new Pair<>(Long.MAX_VALUE - 1, Long.MAX_VALUE - 1), "");
-        }
-        return this.lexerTokens.get(this.index + a);
+    private void finish() {
+        this.currentClosure.appendChild(this.currentNode.clone());
+        this.currentNode = null;
+
+        this.local = false;
+        this.finding = true;
     }
 
-
-    public static Parser getInstance() {
-        return Parser.instance == null ? new Parser() : Parser.instance;
-    }
 }
