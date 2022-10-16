@@ -7,6 +7,7 @@ import me.hammer86gn.deimos.parser.nodes.AssignVariableNode;
 import me.hammer86gn.deimos.parser.nodes.ClosureNode;
 import me.hammer86gn.deimos.parser.nodes.value.ValueSupplier;
 import me.hammer86gn.deimos.parser.nodes.value.impl.BooleanValueSupplier;
+import me.hammer86gn.deimos.parser.nodes.value.impl.ConditionalValueGroupSupplier;
 import me.hammer86gn.deimos.parser.nodes.value.impl.ConditionalValueSupplier;
 import me.hammer86gn.deimos.parser.nodes.value.impl.FloatValueSupplier;
 import me.hammer86gn.deimos.parser.nodes.value.impl.IntegerValueSupplier;
@@ -74,23 +75,21 @@ public class Parser {
     }
 
     private void continueAssignVariableNode() {
-        ValueSupplier supplier = this.createValueSupplier();
+        ValueSupplier supplier = this.createValueSupplier(false);
         ((AssignVariableNode) this.currentNode).setValue(supplier);
 
         this.finish();
     }
 
 
-    private ValueSupplier createValueSupplier() {
-        // TODO(Chloe): Conditional Value Suppliers e.g. a == 1; 2 <= 1.
-
+    private ValueSupplier createValueSupplier(boolean inConditional) {
         switch (this.current.type()) {
             case FLOAT, INT -> {
                 LexerToken peekToken = this.peek();
                 if (peekToken != null && peekToken.type().isOperation()) {
                     // OperationValue
                     return this.createOperationValueSupplier(0);
-                } else if (peekToken != null && peekToken.type().isConditional()) {
+                } else if (peekToken != null && peekToken.type().isConditional() && !inConditional) {
                     // ConditionalValue
                     return this.createConditionalValueSupplier(0);
                 } else  {
@@ -109,7 +108,7 @@ public class Parser {
                 LexerToken peekToken = this.peek();
                 if (peekToken != null && peekToken.type() == LexerTokenType.CONCATENATE) {
                     value = this.concatString(value);
-                } else if (peekToken != null && peekToken.type().isConditional()) {
+                } else if (peekToken != null && peekToken.type().isConditional() && !inConditional) {
                     // ConditionalValue
                     return this.createConditionalValueSupplier(0);
                 }
@@ -184,7 +183,8 @@ public class Parser {
     }
 
     private ConditionalValueSupplier createConditionalValueSupplier(int a) {
-        ConditionalValueSupplier rootCondition = new ConditionalValueSupplier(null, null, null);
+        ConditionalValueGroupSupplier rootCondition = new ConditionalValueGroupSupplier(null, null, null);
+        ConditionalValueSupplier current = new ConditionalValueSupplier(null, null, null);
 
         boolean endSearch = false;
         int increase = a;
@@ -196,7 +196,36 @@ public class Parser {
                 break;
             }
 
-             //  TODO(Chloe): this
+            if (peekToken.type() == LexerTokenType.AND || peekToken.type() == LexerTokenType.OR) {
+                rootCondition.setType(peekToken.type());
+                continue;
+            }
+
+            if (peekToken.type().isConditional()) {
+                if (current.getType() == null) {
+                    current.setType(peekToken.type());
+                } else {
+                    // TODO(Chloe): Error
+                }
+            }
+
+            this.index += increase;
+            increase = 0;
+            ValueSupplier v = this.createValueSupplier(true);
+
+            if (current.getValue0() == null) {
+                current.setValue(v);
+            } else {
+                current.setValue1(v);
+                if (rootCondition.getValue0() == null) {
+                    rootCondition.setValue(current);
+                    current = new ConditionalValueSupplier(null, null, null);
+                } else {
+                    rootCondition.setValue1(current);
+                    endSearch = true;
+                    break;
+                }
+            }
 
         }
 
